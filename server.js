@@ -10,6 +10,10 @@ const io = new Server(server);
 // Serve the static files (your HTML file) from the project root
 app.use(express.static(path.join(__dirname)));
 
+app.get('/healthz', (req, res) => {
+    res.status(200).send('ok');
+});
+
 io.on('connection', (socket) => {
     console.log('A user connected: ' + socket.id);
 
@@ -36,7 +40,7 @@ io.on('connection', (socket) => {
     });
 });
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}`);
+    console.log(`Server running on port ${PORT}`);
 });
