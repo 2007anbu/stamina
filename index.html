@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Collaborative Whiteboard App</title>
+    <!-- Use FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #4f46e5;
+            --primary-hover: #4338ca;
+            --bg-color: #f3f4f6;
+            --sidebar-bg: #ffffff;
+            --text-color: #1f2937;
+            --border-color: #e5e7eb;
+            --active-tool-bg: #e0e7ff;
+            --active-tool-text: #4f46e5;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none; /* Prevent selection while drawing */
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            overflow: hidden; /* Prevent body scroll */
+            height: 100vh;
+            display: flex;
+        }
+
+        /* --- Sidebar Styles --- */
+        .sidebar {
+            width: 80px;
+            background-color: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px 0;
+            gap: 15px;
+            z-index: 10;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.05);
+        }
+
+        .tool-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 100%;
+            align-items: center;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .tool-group:last-child {
+            border-bottom: none;
+        }
+
+        .tool-btn {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            border: none;
+            background: transparent;
+            color: var(--text-color);
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .tool-btn:hover:not(:disabled) {
+            background-color: var(--bg-color);
+            transform: translateY(-2px);
+        }
+
+        .tool-btn.active {
+            background-color: var(--active-tool-bg);
+            color: var(--active-tool-text);
+        }
+        
+        .tool-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .tool-label {
+            position: absolute;
+            left: 60px;
+            background: #333;
+            color: #fff;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+            white-space: nowrap;
+            z-index: 20;
+        }
+
+        .tool-btn:hover .tool-label {
+            opacity: 1;
+        }
+
+        /* Color Picker Styling */
+        .color-picker-wrapper {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            overflow: hidden;
+            border: 2px solid var(--border-color);
+            cursor: pointer;
+            position: relative;
+        }
+
+        .color-picker-wrapper input[type="color"] {
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            cursor: pointer;
+            padding: 0;
+            border: none;
+        }
+
+        /* Range Slider for Brush Size */
+        .size-slider-container {
+            position: relative;
+            width: 50px;
+            height: 100px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .size-slider {
+            -webkit-appearance: none;
+            width: 100px;
+            height: 6px;
+            background: var(--border-color);
+            border-radius: 5px;
+            outline: none;
+            transform: rotate(-90deg);
+            position: absolute;
+            top: 50px;
+        }
+
+        .size-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--primary-color);
+            cursor: pointer;
+        }
+
+        /* --- Canvas Area --- */
+        .canvas-container {
+            flex-grow: 1;
+            position: relative;
+            overflow: hidden;
+            background-color: #ffffff;
+            /* Dot grid pattern */
+            background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+            background-size: 40px 40px;
+            cursor: grab;
+        }
+
+        .canvas-container.drawing {
+            cursor: crosshair;
+        }
+
+        canvas {
+            display: block;
+            transform-origin: 0 0;
+            /* box-shadow: 0 0 20px rgba(0,0,0,0.1); Shadow to show canvas boundary */
+        }
+
+        /* Floating Text Inputs */
+        .text-input {
+            position: absolute;
+            background: transparent;
+            border: 1px dashed var(--primary-color);
+            outline: none;
+            font-family: sans-serif;
+            color: var(--text-color);
+            padding: 4px;
+            z-index: 5;
+            min-width: 50px;
+            resize: none;
+            overflow: hidden;
+            white-space: pre;
+            line-height: 1.2;
+            pointer-events: auto;
+        }
+
+        /* --- Header Actions --- */
+        .header-actions {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 20;
+        }
+
+        .send-btn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-weight: 600;
+            font-size: 1rem;
+            box-shadow: 0 4px 6px rgba(79, 70, 229, 0.3);
+            cursor: pointer;
+            transition: transform 0.1s, background-color 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .send-btn:hover {
+            background-color: var(--primary-hover);
+            transform: translateY(-1px);
+        }
+
+        .send-btn:active {
+            transform: translateY(1px);
+        }
+
+        /* --- Toast Notification --- */
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background-color: #333;
+            color: #fff;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            z-index: 100;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+
+        .toast-success { border-left: 4px solid #10b981; }
+
+        /* --- Zoom Controls --- */
+        .zoom-display {
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: #666;
+            margin-top: 5px;
+            margin-bottom: 5px;
+        }
+        
+        .zoom-controls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Left Sidebar -->
+    <aside class="sidebar">
+        <!-- Undo / Redo Group -->
+        <div class="tool-group">
+            <button class="tool-btn" id="btn-undo" onclick="undo()" disabled title="Undo (Ctrl+Z)">
+                <i class="fas fa-undo"></i>
+                <span class="tool-label">Undo</span>
+            </button>
+            <button class="tool-btn" id="btn-redo" onclick="redo()" disabled title="Redo (Ctrl+Y)">
+                <i class="fas fa-redo"></i>
+                <span class="tool-label">Redo</span>
+            </button>
+        </div>
+
+        <!-- Drawing Tools -->
+        <div class="tool-group">
+            <button class="tool-btn active" id="btn-brush" onclick="setTool('brush')">
+                <i class="fas fa-paint-brush"></i>
+                <span class="tool-label">Brush</span>
+            </button>
+            <button class="tool-btn" id="btn-text" onclick="setTool('text')">
+                <i class="fas fa-font"></i>
+                <span class="tool-label">Text</span>
+            </button>
+            <button class="tool-btn" id="btn-eraser" onclick="setTool('eraser')">
+                <i class="fas fa-eraser"></i>
+                <span class="tool-label">Eraser</span>
+            </button>
+        </div>
+
+        <!-- Properties -->
+        <div class="tool-group">
+            <div class="color-picker-wrapper" title="Color">
+                <input type="color" id="color-picker" value="#1f2937">
+            </div>
+            <div class="size-slider-container" title="Size">
+                <input type="range" id="size-slider" class="size-slider" min="1" max="100" value="5">
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="tool-group" style="margin-top: auto;">
+            <button class="tool-btn" onclick="clearBoard()" style="color: #ef4444;">
+                <i class="fas fa-trash-alt"></i>
+                <span class="tool-label">Delete All</span>
+            </button>
+        </div>
+
+        <!-- Zoom -->
+        <div class="tool-group">
+            <div class="zoom-controls">
+                <button class="tool-btn" onclick="zoomIn()">
+                    <i class="fas fa-search-plus"></i>
+                </button>
+                <div class="zoom-display" id="zoom-level">100%</div>
+                <button class="tool-btn" onclick="zoomOut()">
+                    <i class="fas fa-search-minus"></i>
+                </button>
+                <button class="tool-btn" onclick="resetZoom()" style="font-size: 0.9rem;" title="Reset View">
+                    <i class="fas fa-compress-arrows-alt"></i>
+                </button>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Canvas Area -->
+    <main class="canvas-container" id="canvas-container">
+        <canvas id="whiteboard"></canvas>
+    </main>
+
+    <!-- Top Right Send Button -->
+    <div class="header-actions">
+        <button class="send-btn" onclick="sendBoard()">
+            <i class="fas fa-paper-plane"></i> Send
+        </button>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast toast-success">
+        <i class="fas fa-check-circle"></i>
+        <span id="toast-msg">Board sent successfully!</span>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        // --- Configuration ---
+        // Set canvas to a large fixed size to simulate an infinite board
+        const CANVAS_WIDTH = 4000;
+        const CANVAS_HEIGHT = 4000;
+
+        const canvas = document.getElementById('whiteboard');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('canvas-container');
+        
+        let isDrawing = false;
+        let isPanning = false; // Middle mouse or space drag
+        let currentTool = 'brush'; // brush, text, eraser
+        let brushSize = 5;
+        let brushColor = '#1f2937';
+        
+        // Zoom & Pan State
+        let scale = 1;
+        let panX = 0;
+        let panY = 0;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+
+        // History State (Undo/Redo)
+        let history = [];
+        let historyStep = -1;
+
+        // Text State
+        let activeTextInput = null;
+
+        // --- Initialization ---
+
+        function initCanvas() {
+            canvas.width = CANVAS_WIDTH;
+            canvas.height = CANVAS_HEIGHT;
+            
+            // Center the view initially
+            panX = (container.clientWidth - CANVAS_WIDTH) / 2;
+            panY = (container.clientHeight - CANVAS_HEIGHT) / 2;
+            
+            // Fill white background (so eraser works and export looks correct)
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Save initial blank state
+            saveState();
+            
+            updateCanvasTransform();
+        }
+
+        window.addEventListener('load', initCanvas);
+        
+        // Window resize handling - keep center relative if needed, 
+        // but for now we just ensure container is sized correctly
+        window.addEventListener('resize', () => {
+            // Optional: Adjust centering logic here if desired
+        });
+
+        // --- Tool Handling ---
+
+        const colorPicker = document.getElementById('color-picker');
+        const sizeSlider = document.getElementById('size-slider');
+        const btns = {
+            brush: document.getElementById('btn-brush'),
+            text: document.getElementById('btn-text'),
+            eraser: document.getElementById('btn-eraser')
+        };
+        const undoBtn = document.getElementById('btn-undo');
+        const redoBtn = document.getElementById('btn-redo');
+
+        colorPicker.addEventListener('input', (e) => {
+            brushColor = e.target.value;
+            if(currentTool === 'eraser') setTool('brush');
+        });
+
+        sizeSlider.addEventListener('input', (e) => {
+            brushSize = parseInt(e.target.value);
+        });
+
+        function setTool(tool) {
+            // If switching from text, finalize any open text
+            if (currentTool === 'text' && activeTextInput) {
+                finalizeText();
+            }
+
+            currentTool = tool;
+            
+            // UI Updates
+            Object.values(btns).forEach(b => b.classList.remove('active'));
+            if(btns[tool]) btns[tool].classList.add('active');
+
+            // Cursor Updates
+            updateCursor();
+        }
+
+        function updateCursor() {
+            if (currentTool === 'text') {
+                container.style.cursor = 'text';
+                container.classList.remove('drawing');
+            } else if (currentTool === 'eraser') {
+                container.style.cursor = 'cell'; // distinctive cursor
+                container.classList.add('drawing');
+            } else {
+                container.style.cursor = 'crosshair';
+                container.classList.add('drawing');
+            }
+        }
+
+        function clearBoard() {
+            if(confirm('Are you sure you want to clear the entire whiteboard?')) {
+                // Remove any text inputs
+                document.querySelectorAll('.text-input').forEach(el => el.remove());
+                activeTextInput = null;
+
+                // Clear Canvas
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                saveState();
+            }
+        }
+
+        // --- Drawing & Panning Logic ---
+
+        function updateCanvasTransform() {
+            canvas.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+            document.getElementById('zoom-level').innerText = Math.round(scale * 100) + '%';
+        }
+
+        // Convert screen coordinates to canvas coordinates
+        function getCanvasCoordinates(e) {
+            const rect = container.getBoundingClientRect();
+            const clientX = e.clientX || e.touches[0].clientX;
+            const clientY = e.clientY || e.touches[0].clientY;
+
+            const x = (clientX - rect.left - panX) / scale;
+            const y = (clientY - rect.top - panY) / scale;
+
+            return { x, y };
+        }
+
+        // Event Listeners
+        container.addEventListener('mousedown', startAction);
+        container.addEventListener('mousemove', moveAction);
+        container.addEventListener('mouseup', endAction);
+        container.addEventListener('mouseleave', endAction);
+        
+        // Keyboard Shortcuts
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+                e.preventDefault();
+                undo();
+            }
+            if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+                e.preventDefault();
+                redo();
+            }
+        });
+
+        // Touch support
+        container.addEventListener('touchstart', (e) => { 
+            // Prevent scrolling on touch
+            if(e.target === canvas) e.preventDefault(); 
+            startAction(e); 
+        }, {passive: false});
+        container.addEventListener('touchmove', (e) => { if(e.target === canvas) e.preventDefault(); moveAction(e); }, {passive: false});
+        container.addEventListener('touchend', (e) => { endAction(e); });
+
+        function startAction(e) {
+            // Middle mouse button (button 1) or Spacebar (handled via global flag usually, but simplifying here)
+            if (e.button === 1) {
+                isPanning = true;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+                container.style.cursor = 'grabbing';
+                return;
+            }
+
+            // Left click
+            if (e.button !== 0) return;
+
+            const pos = getCanvasCoordinates(e);
+
+            if (currentTool === 'text') {
+                handleTextToolClick(pos.x, pos.y, e.clientX, e.clientY);
+                return;
+            }
+
+            isDrawing = true;
+            
+            // Setup Context
+            ctx.lineWidth = brushSize;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = currentTool === 'eraser' ? '#ffffff' : brushColor;
+            
+            ctx.beginPath();
+            ctx.moveTo(pos.x, pos.y);
+        }
+
+        function moveAction(e) {
+            // Panning Logic
+            if (isPanning) {
+                const dx = e.clientX - lastMouseX;
+                const dy = e.clientY - lastMouseY;
+                panX += dx;
+                panY += dy;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+                updateCanvasTransform();
+                return;
+            }
+
+            if (!isDrawing) return;
+
+            const pos = getCanvasCoordinates(e);
+            ctx.lineTo(pos.x, pos.y);
+            ctx.stroke();
+        }
+
+        function endAction(e) {
+            if (isPanning) {
+                isPanning = false;
+                updateCursor();
+                return;
+            }
+
+            if (isDrawing) {
+                isDrawing = false;
+                ctx.closePath();
+                saveState(); // Save to history
+            }
+        }
+
+        // --- Text Tool Logic ---
+
+        function handleTextToolClick(canvasX, canvasY, screenX, screenY) {
+            if (activeTextInput) {
+                finalizeText();
+                return;
+            }
+
+            // Create textarea
+            const input = document.createElement('textarea');
+            input.className = 'text-input';
+            
+            // Position text input absolutely within the container
+            // Screen coordinates relative to container
+            const rect = container.getBoundingClientRect();
+            input.style.left = (screenX - rect.left) + 'px';
+            input.style.top = (screenY - rect.top) + 'px';
+            
+            // Style text
+            const fontSize = Math.max(12, brushSize * 2 + 10);
+            input.style.fontSize = fontSize + 'px';
+            input.style.color = brushColor;
+            
+            // Store data for rendering to canvas later
+            input.dataset.x = canvasX;
+            input.dataset.y = canvasY;
+            input.dataset.fontSize = fontSize;
+
+            container.appendChild(input);
+            setTimeout(() => input.focus(), 0);
+            activeTextInput = input;
+
+            // Handle keydown
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    finalizeText();
+                }
+                if (e.key === 'Escape') {
+                    input.remove();
+                    activeTextInput = null;
+                }
+            });
+
+            // Auto resize
+            input.addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = (this.scrollHeight) + 'px';
+            });
+        }
+
+        function finalizeText() {
+            if (!activeTextInput) return;
+            
+            const text = activeTextInput.value;
+            if (text.trim() !== '') {
+                const x = parseFloat(activeTextInput.dataset.x);
+                const y = parseFloat(activeTextInput.dataset.y);
+                const fontSize = parseFloat(activeTextInput.dataset.fontSize);
+                
+                ctx.font = `${fontSize}px sans-serif`;
+                ctx.fillStyle = brushColor;
+                ctx.textBaseline = 'top';
+                
+                const lines = text.split('\n');
+                const lineHeight = fontSize * 1.2;
+                
+                lines.forEach((line, index) => {
+                    ctx.fillText(line, x, y + (index * lineHeight));
+                });
+                
+                saveState(); // Save text to history
+            }
+            
+            activeTextInput.remove();
+            activeTextInput = null;
+        }
+
+        // --- Undo / Redo Logic ---
+
+        function saveState() {
+            // If we are in the middle of history and draw something, cut off the "future"
+            if (historyStep < history.length - 1) {
+                history = history.slice(0, historyStep + 1);
+            }
+            
+            // Push current canvas state as DataURL
+            history.push(canvas.toDataURL());
+            historyStep++;
+            
+            updateUndoRedoUI();
+        }
+
+        function undo() {
+            if (historyStep > 0) {
+                historyStep--;
+                restoreState(history[historyStep]);
+            }
+        }
+
+        function redo() {
+            if (historyStep < history.length - 1) {
+                historyStep++;
+                restoreState(history[historyStep]);
+            }
+        }
+
+        function restoreState(dataUrl) {
+            const img = new Image();
+            img.src = dataUrl;
+            img.onload = () => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0);
+                updateUndoRedoUI();
+            };
+        }
+
+        function updateUndoRedoUI() {
+            undoBtn.disabled = (historyStep <= 0);
+            redoBtn.disabled = (historyStep >= history.length - 1);
+        }
+
+        // --- Zoom Logic ---
+
+        function zoomIn() {
+            scale *= 1.2;
+            updateCanvasTransform();
+        }
+
+        function zoomOut() {
+            scale /= 1.2;
+            if (scale < 0.1) scale = 0.1;
+            updateCanvasTransform();
+        }
+
+        function resetZoom() {
+            scale = 1;
+            panX = (container.clientWidth - CANVAS_WIDTH) / 2;
+            panY = (container.clientHeight - CANVAS_HEIGHT) / 2;
+            updateCanvasTransform();
+        }
+
+        // Wheel Zoom (Zoom towards center of container for simplicity, or pointer for advanced)
+        container.addEventListener('wheel', (e) => {
+            if (e.ctrlKey || e.metaKey) {
+                e.preventDefault();
+                const delta = e.deltaY < 0 ? 1.1 : 0.9;
+                const newScale = scale * delta;
+                
+                // Limit scale
+                if (newScale > 5 || newScale < 0.1) return;
+
+                // Calculate mouse position relative to container
+                const rect = container.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+
+                // Adjust Pan to zoom towards mouse
+                // Logic: Keep the point under the mouse stationary
+                panX = mouseX - (mouseX - panX) * delta;
+                panY = mouseY - (mouseY - panY) * delta;
+
+                scale = newScale;
+                updateCanvasTransform();
+            } else {
+                // Regular scroll for Panning
+                e.preventDefault();
+                panX -= e.deltaX;
+                panY -= e.deltaY;
+                updateCanvasTransform();
+            }
+        }, { passive: false });
+
+        // --- Send Logic ---
+        function sendBoard() {
+            if (activeTextInput) finalizeText();
+            
+            // In a real app, send `canvas.toDataURL()` via WebSocket/API
+            console.log("Board content ready to send.");
+            showToast();
+        }
+
+        function showToast() {
+            const toast = document.getElementById('toast');
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // --- Connect to Backend ---
+const socket = io();
+
+// 1. Listen for incoming boards from the other person
+socket.on('receiveBoard', (imageData) => {
+    const img = new Image();
+    img.onload = () => {
+        // Draw the received image onto the canvas
+        ctx.drawImage(img, 0, 0);
+        saveState(); // Save to history so we can undo it
+    };
+    img.src = imageData;
+});
+
+// 2. Listen for 'Clear' command from the other person
+socket.on('clearBoard', () => {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    saveState();
+    showToast("Board cleared by other user");
+});
+
+// 3. Update the Send Function to emit to server
+// Replace the existing sendBoard() function with this:
+function sendBoard() {
+    if (activeTextInput) finalizeText();
+    
+    const imageData = canvas.toDataURL('image/png');
+    
+    // Send data to the server
+    socket.emit('sendBoard', imageData);
+    
+    console.log("Sent to server");
+    showToast("Sent to connected user!");
+}
+
+    </script>
+</body>
+</html>
