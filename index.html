@@ -1080,8 +1080,42 @@
             // Emit to other users
             socket.emit('shareDiagram', diagram);
 
+            // Optionally add to canvas
+            addDiagramToCanvas(diagram);
+
             showToast('Diagram saved and shared!');
             closeDiagramModal();
+        }
+
+        async function addDiagramToCanvas(diagram) {
+            try {
+                const { svg } = await mermaid.render(`canvas-diagram-${diagram.id}`, diagram.code);
+                
+                // Create image from SVG
+                const img = new Image();
+                const svgBlob = new Blob([svg], {type: 'image/svg+xml'});
+                const url = URL.createObjectURL(svgBlob);
+                
+                img.onload = () => {
+                    // Draw the diagram on canvas at a good position
+                    const canvasX = Math.random() * (CANVAS_WIDTH - 400) + 200;
+                    const canvasY = Math.random() * (CANVAS_HEIGHT - 300) + 150;
+                    
+                    // Scale to fit nicely
+                    const scale = 0.5;
+                    const scaledWidth = img.width * scale;
+                    const scaledHeight = img.height * scale;
+                    
+                    ctx.drawImage(img, canvasX, canvasY, scaledWidth, scaledHeight);
+                    saveState();
+                    
+                    URL.revokeObjectURL(url);
+                };
+                
+                img.src = url;
+            } catch (error) {
+                console.error('Error adding diagram to canvas:', error);
+            }
         }
 
         // Load saved diagrams
@@ -1209,24 +1243,10 @@ socket.on('receiveDiagram', async (diagram) => {
     diagrams.push(diagram);
     localStorage.setItem('diagrams', JSON.stringify(diagrams));
     
-    // Optionally render the diagram on the canvas
-    try {
-        const { svg } = await mermaid.render(`received-diagram-${diagram.id}`, diagram.code);
-        
-        // Create a temporary div to hold the SVG and convert to image
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = svg;
-        document.body.appendChild(tempDiv);
-        
-        // Use html2canvas or similar to convert SVG to canvas image
-        // For now, just show a notification
-        showToast(`New diagram received: ${diagram.code.substring(0, 50)}...`);
-        
-        document.body.removeChild(tempDiv);
-    } catch (error) {
-        console.error('Error rendering received diagram:', error);
-        showToast("New diagram received from other user!");
-    }
+    // Add to canvas automatically
+    await addDiagramToCanvas(diagram);
+    
+    showToast("New diagram received and added to canvas!");
 });
 
 // 4. Update the Send Function to emit to server
