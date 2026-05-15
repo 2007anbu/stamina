@@ -6,6 +6,9 @@
     <title>Collaborative Whiteboard App</title>
     <!-- Use FontAwesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Mermaid CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
     <style>
         :root {
             --primary-color: #4f46e5;
@@ -279,6 +282,176 @@
             gap: 5px;
         }
 
+        /* Modal Styles */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background-color: white;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            color: var(--text-color);
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--text-color);
+        }
+
+        .modal-body {
+            padding: 20px;
+        }
+
+        .modal-body textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 14px;
+            resize: vertical;
+            margin-bottom: 15px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .render-btn, .save-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .render-btn {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .render-btn:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .save-btn {
+            background-color: #10b981;
+            color: white;
+        }
+
+        .save-btn:hover {
+            background-color: #059669;
+        }
+
+        .diagram-preview {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            min-height: 200px;
+            background-color: #f9fafb;
+        }
+
+        .diagram-examples {
+            margin-bottom: 15px;
+        }
+
+        .diagram-examples h4 {
+            margin: 0 0 10px 0;
+            color: var(--text-color);
+        }
+
+        .diagram-examples button {
+            margin-right: 8px;
+            margin-bottom: 8px;
+            padding: 6px 12px;
+            border: 1px solid var(--border-color);
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .diagram-examples button:hover {
+            background-color: var(--bg-color);
+        }
+
+        .saved-diagrams-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .diagram-item {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            background-color: #f9fafb;
+        }
+
+        .diagram-item h4 {
+            margin: 0 0 10px 0;
+            color: var(--text-color);
+        }
+
+        .diagram-item pre {
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+
+        .diagram-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .diagram-actions button {
+            padding: 6px 12px;
+            border: 1px solid var(--border-color);
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .diagram-actions button:hover {
+            background-color: var(--bg-color);
+        }
+
     </style>
 </head>
 <body>
@@ -306,6 +479,10 @@
             <button class="tool-btn" id="btn-text" onclick="setTool('text')">
                 <i class="fas fa-font"></i>
                 <span class="tool-label">Text</span>
+            </button>
+            <button class="tool-btn" id="btn-diagram" onclick="setTool('diagram')">
+                <i class="fas fa-project-diagram"></i>
+                <span class="tool-label">Diagram</span>
             </button>
             <button class="tool-btn" id="btn-eraser" onclick="setTool('eraser')">
                 <i class="fas fa-eraser"></i>
@@ -358,12 +535,53 @@
         <button class="send-btn" onclick="sendBoard()">
             <i class="fas fa-paper-plane"></i> Send
         </button>
+        <button class="send-btn" onclick="showSavedDiagrams()" style="background-color: #6366f1;">
+            <i class="fas fa-folder-open"></i> Diagrams
+        </button>
     </div>
 
     <!-- Toast Notification -->
     <div id="toast" class="toast toast-success">
         <i class="fas fa-check-circle"></i>
         <span id="toast-msg">Board sent successfully!</span>
+    </div>
+
+    <!-- Diagram Modal -->
+    <div id="diagram-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Create Mermaid Diagram</h3>
+                <button class="close-btn" onclick="closeDiagramModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="diagram-examples">
+                    <h4>Examples:</h4>
+                    <button onclick="loadExample('flowchart')">Flowchart</button>
+                    <button onclick="loadExample('sequence')">Sequence Diagram</button>
+                    <button onclick="loadExample('gantt')">Gantt Chart</button>
+                    <button onclick="loadExample('pie')">Pie Chart</button>
+                </div>
+                <textarea id="diagram-code" placeholder="Enter Mermaid diagram code here..." rows="10"></textarea>
+                <div class="modal-actions">
+                    <button class="render-btn" onclick="renderDiagram()">Render Diagram</button>
+                    <button class="save-btn" onclick="saveDiagram()">Save & Share</button>
+                </div>
+                <div id="diagram-preview" class="diagram-preview"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Saved Diagrams Modal -->
+    <div id="saved-diagrams-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Saved Diagrams</h3>
+                <button class="close-btn" onclick="closeSavedDiagramsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="saved-diagrams-list" class="saved-diagrams-list"></div>
+            </div>
+        </div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
@@ -419,6 +637,13 @@
 
         window.addEventListener('load', initCanvas);
         
+        // Initialize Mermaid
+        mermaid.initialize({ 
+            startOnLoad: false,
+            theme: 'default',
+            securityLevel: 'loose'
+        });
+        
         // Window resize handling - keep center relative if needed, 
         // but for now we just ensure container is sized correctly
         window.addEventListener('resize', () => {
@@ -432,6 +657,7 @@
         const btns = {
             brush: document.getElementById('btn-brush'),
             text: document.getElementById('btn-text'),
+            diagram: document.getElementById('btn-diagram'),
             eraser: document.getElementById('btn-eraser')
         };
         const undoBtn = document.getElementById('btn-undo');
@@ -460,6 +686,11 @@
 
             // Cursor Updates
             updateCursor();
+
+            // Special handling for diagram tool
+            if (tool === 'diagram') {
+                openDiagramModal();
+            }
         }
 
         function updateCursor() {
@@ -469,6 +700,9 @@
             } else if (currentTool === 'eraser') {
                 container.style.cursor = 'cell'; // distinctive cursor
                 container.classList.add('drawing');
+            } else if (currentTool === 'diagram') {
+                container.style.cursor = 'pointer';
+                container.classList.remove('drawing');
             } else {
                 container.style.cursor = 'crosshair';
                 container.classList.add('drawing');
@@ -783,12 +1017,167 @@
             showToast();
         }
 
-        function showToast() {
+        function showToast(message = "Board sent successfully!") {
             const toast = document.getElementById('toast');
+            document.getElementById('toast-msg').textContent = message;
             toast.classList.add('show');
             setTimeout(() => {
                 toast.classList.remove('show');
             }, 3000);
+        }
+
+        // --- Diagram Functions ---
+        function openDiagramModal() {
+            document.getElementById('diagram-modal').style.display = 'flex';
+            document.getElementById('diagram-code').focus();
+        }
+
+        function closeDiagramModal() {
+            document.getElementById('diagram-modal').style.display = 'none';
+            setTool('brush'); // Switch back to brush
+        }
+
+        async function renderDiagram() {
+            const code = document.getElementById('diagram-code').value.trim();
+            if (!code) {
+                alert('Please enter Mermaid diagram code');
+                return;
+            }
+
+            try {
+                // Clear previous diagram
+                const preview = document.getElementById('diagram-preview');
+                preview.innerHTML = '';
+
+                // Render the diagram
+                const { svg } = await mermaid.render('diagram-svg', code);
+                preview.innerHTML = svg;
+
+                showToast('Diagram rendered successfully!');
+            } catch (error) {
+                console.error('Mermaid rendering error:', error);
+                alert('Error rendering diagram: ' + error.message);
+            }
+        }
+
+        function saveDiagram() {
+            const code = document.getElementById('diagram-code').value.trim();
+            if (!code) {
+                alert('Please enter diagram code first');
+                return;
+            }
+
+            // Save to localStorage for persistence
+            const diagrams = JSON.parse(localStorage.getItem('diagrams') || '[]');
+            const diagram = {
+                id: Date.now(),
+                code: code,
+                timestamp: new Date().toISOString()
+            };
+            diagrams.push(diagram);
+            localStorage.setItem('diagrams', JSON.stringify(diagrams));
+
+            // Emit to other users
+            socket.emit('shareDiagram', diagram);
+
+            showToast('Diagram saved and shared!');
+            closeDiagramModal();
+        }
+
+        // Load saved diagrams
+        function loadDiagrams() {
+            const diagrams = JSON.parse(localStorage.getItem('diagrams') || '[]');
+            return diagrams;
+        }
+
+        // Show saved diagrams modal
+        function showSavedDiagrams() {
+            const diagrams = loadDiagrams();
+            const list = document.getElementById('saved-diagrams-list');
+            
+            if (diagrams.length === 0) {
+                list.innerHTML = '<p>No saved diagrams yet. Create one using the Diagram tool!</p>';
+            } else {
+                list.innerHTML = diagrams.map(diagram => `
+                    <div class="diagram-item">
+                        <h4>Diagram ${diagram.id}</h4>
+                        <small>Created: ${new Date(diagram.timestamp).toLocaleString()}</small>
+                        <pre>${diagram.code}</pre>
+                        <div class="diagram-actions">
+                            <button onclick="loadDiagramToEditor(${diagram.id})">Edit</button>
+                            <button onclick="shareDiagram(${diagram.id})">Share</button>
+                            <button onclick="deleteDiagram(${diagram.id})" style="color: #ef4444;">Delete</button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+            
+            document.getElementById('saved-diagrams-modal').style.display = 'flex';
+        }
+
+        function closeSavedDiagramsModal() {
+            document.getElementById('saved-diagrams-modal').style.display = 'none';
+        }
+
+        function loadDiagramToEditor(id) {
+            const diagrams = loadDiagrams();
+            const diagram = diagrams.find(d => d.id === id);
+            if (diagram) {
+                document.getElementById('diagram-code').value = diagram.code;
+                closeSavedDiagramsModal();
+                openDiagramModal();
+            }
+        }
+
+        function shareDiagram(id) {
+            const diagrams = loadDiagrams();
+            const diagram = diagrams.find(d => d.id === id);
+            if (diagram) {
+                socket.emit('shareDiagram', diagram);
+                showToast('Diagram shared with connected users!');
+            }
+        }
+
+        function deleteDiagram(id) {
+            if (confirm('Are you sure you want to delete this diagram?')) {
+                const diagrams = loadDiagrams().filter(d => d.id !== id);
+                localStorage.setItem('diagrams', JSON.stringify(diagrams));
+                showSavedDiagrams(); // Refresh the list
+                showToast('Diagram deleted!');
+            }
+        }
+
+        // Load example diagrams
+        function loadExample(type) {
+            const examples = {
+                flowchart: `graph TD
+    A[Start] --> B{Is it working?}
+    B -->|Yes| C[Great!]
+    B -->|No| D[Debug]
+    D --> B`,
+
+                sequence: `sequenceDiagram
+    Alice->>Bob: Hello Bob, how are you?
+    Bob-->>Alice: I am good thanks!
+    Alice->>Bob: That's great to hear!`,
+
+                gantt: `gantt
+    title A Gantt Diagram
+    dateFormat YYYY-MM-DD
+    section Section
+    A task          :a1, 2014-01-01, 30d
+    Another task    :after a1, 20d
+    section Another
+    Task in sec     :2014-01-12, 12d
+    another task    :24d`,
+
+                pie: `pie title Pets adopted by volunteers
+    "Dogs" : 386
+    "Cats" : 85
+    "Rats" : 15`
+            };
+
+            document.getElementById('diagram-code').value = examples[type] || '';
         }
 
         // --- Connect to Backend ---
@@ -813,7 +1202,34 @@ socket.on('clearBoard', () => {
     showToast("Board cleared by other user");
 });
 
-// 3. Update the Send Function to emit to server
+// 3. Listen for shared diagrams
+socket.on('receiveDiagram', async (diagram) => {
+    // Save the received diagram
+    const diagrams = JSON.parse(localStorage.getItem('diagrams') || '[]');
+    diagrams.push(diagram);
+    localStorage.setItem('diagrams', JSON.stringify(diagrams));
+    
+    // Optionally render the diagram on the canvas
+    try {
+        const { svg } = await mermaid.render(`received-diagram-${diagram.id}`, diagram.code);
+        
+        // Create a temporary div to hold the SVG and convert to image
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = svg;
+        document.body.appendChild(tempDiv);
+        
+        // Use html2canvas or similar to convert SVG to canvas image
+        // For now, just show a notification
+        showToast(`New diagram received: ${diagram.code.substring(0, 50)}...`);
+        
+        document.body.removeChild(tempDiv);
+    } catch (error) {
+        console.error('Error rendering received diagram:', error);
+        showToast("New diagram received from other user!");
+    }
+});
+
+// 4. Update the Send Function to emit to server
 // Replace the existing sendBoard() function with this:
 function sendBoard() {
     if (activeTextInput) finalizeText();

@@ -35,6 +35,13 @@ io.on('connection', (socket) => {
         socket.broadcast.emit('clearBoard');
     });
 
+    // Event 3: Diagram sharing
+    socket.on('shareDiagram', (diagram) => {
+        console.log('Diagram shared by ' + socket.id);
+        // Broadcast to all other connected clients
+        socket.broadcast.emit('receiveDiagram', diagram);
+    });
+
     socket.on('disconnect', () => {
         console.log('User disconnected: ' + socket.id);
     });
